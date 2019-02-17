@@ -1,7 +1,7 @@
 const Constants = require('./constants');
 const { Types, Widgets, WebhookFieldMappings } = Constants;
 
-const controlTypeForField = (field, editor) => {
+const controlTypeForField = (field, editor, originalControls) => {
   if (field.type === Types.ARRAY) {
     if (field.items.linkType === Types.ASSET) {
       const linkValidation = 
@@ -92,6 +92,21 @@ const controlTypeForField = (field, editor) => {
     throw "TODO: Date.notImplemented";
   }
 
+  if (field.type === Types.OBJECT) {
+    // Check the original control
+    const originalControl = (originalControls || []).find(c => c.name === field.id);
+
+    if (originalControl) {
+      return {
+        controlType: originalControl.controlType
+      }
+    }
+
+    return {
+      controlType: "address",
+    };
+  }
+
   console.log(field, editor);
   throw "TODO: Primitive.NotImplemented";
 }
@@ -130,7 +145,7 @@ module.exports = (result, config) => {
   const mungedTypes = {};
   result.contentTypes.forEach(entry => {
     mungedTypes[entry.sys.id] = {
-      controls: makeControls(entry, result.editorInterfaces),
+      controls: makeControls(entry, result.editorInterfaces, config.originalControls[entry.sys.id]),
       name: entry.name,
     }
     if (config.singletons.includes(entry.sys.id)) {

@@ -17,7 +17,9 @@ const getBucket = () => {
     function(err, meta) {
       if (err) return console.error(err);
 
-      contentfulConfig.singletons = meta.oneOff;
+      contentfulConfig.singletons = meta.oneOff || [];
+      contentfulConfig.originalControls = meta.originalControls || {};
+
       contentfulExport({
         spaceId: contentfulConfig.contentfulSpaceId,
         managementToken: contentfulConfig.contentfulPersonalAccessToken,

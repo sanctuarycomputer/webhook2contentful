@@ -1,4 +1,6 @@
 const Constants = require('./constants');
+const ignoreWebhookControl = require('./ignoreWebhookControl');
+
 const { Types, Widgets, WebhookFieldMappings, WebhookSiteSettingsType } = Constants;
 
 const applyDisplayField = (ContentType, fieldNames) => {
@@ -11,23 +13,10 @@ const applyDisplayField = (ContentType, fieldNames) => {
 const TAKEN_GRIDITEM_SUBTYPES = [];
 
 const buildWebhookControlForContentType = (migration, ContentType, control, detectedInverseRelationships) => {
-  if (detectedInverseRelationships.includes(control.name)) {
-    console.warn(`W2C ~~~> Ignoring relationship ${control.name} as it appears to be inverse`);
-    return; 
-  }
-
-  /* Ignore Timestamps & Extra Junk - plus slugs are generated at build time by webhook */
-  if (["slug", "create_date", "last_updated", "publish_date", "preview_url"].includes(control.name)) return;
-
-  /* Ignore "instruction" blocks */
-  if (control.controlType === "instruction") {
-    console.warn(`webhook2contentful ~~~> Ignoring instruction ${control.name} as contentful instructions belong on the field rather than seperate.`, control.help);
-    return;
-  }
+  if (ignoreWebhookControl(control, detectedInverseRelationships)) return false;
 
   if (control.controlType === "embedly") {
     console.warn(`webhook2contentful ~~~> Treating ${control.name} as a string, as Contentful doesn't support embedly.`);
-    return;
   }
 
   const controlMapping = WebhookFieldMappings[control.controlType];
@@ -54,8 +43,7 @@ const buildWebhookControlForContentType = (migration, ContentType, control, dete
 
   /* Init the field */
   const Field = ContentType.createField(control.name)
-    .name(control.label)
-    .required(control.required);
+    .name(control.label);
 
   let type = controlMapping.contentfulType;
 
@@ -114,6 +102,11 @@ const buildWebhookControlForContentType = (migration, ContentType, control, dete
 
   // Editors & Extra Validations
   switch(control.controlType) {
+    case 'wysiwyg': {
+      ContentType.changeEditorInterface(control.name, Widgets.MULTIPLE_LINE);
+      break;
+    }
+
     case 'url': {
       ContentType.changeEditorInterface(control.name, Widgets.URL_EDITOR);
       break;
@@ -121,6 +114,15 @@ const buildWebhookControlForContentType = (migration, ContentType, control, dete
 
     case 'select': {
       ContentType.changeEditorInterface(control.name, Widgets.DROPDOWN);
+      const { options } = control.meta;
+      defaultValidations = [...defaultValidations, {
+        in: options.map(o => o.value)
+      }];
+      break;
+    }
+
+    case 'radio': {
+      ContentType.changeEditorInterface(control.name, Widgets.RADIO);
       const { options } = control.meta;
       defaultValidations = [...defaultValidations, {
         in: options.map(o => o.value)
@@ -173,6 +175,7 @@ module.exports = function (migration, context) {
   }
 
   global.webhook2contentful.oneOff = [];
+  global.webhook2contentful.originalControls = {};
 
   /* Build our Main content types */
   const ContentTypeTuples = Object.keys(webhookTypes).map(webhookKey => {
@@ -188,6 +191,9 @@ module.exports = function (migration, context) {
     if (webhookTypes[webhookKey].oneOff) {
       global.webhook2contentful.oneOff.push(webhookKey);
     }
+
+    global.webhook2contentful.originalControls[webhookKey] = webhookTypes[webhookKey].controls;
+
     webhookTypes[webhookKey].controls.forEach(control => {
       buildWebhookControlForContentType(
         migration, 

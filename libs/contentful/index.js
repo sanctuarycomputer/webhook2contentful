@@ -19,11 +19,23 @@ module.exports = (webhookData, webhookTypes, webhookSettings, done, cb) => {
   }).then(() => {
     return new Promise((resolve, reject) => {
       require('jsonfile').writeFile(`${__dirname}/generatedMeta.json`, {
-        oneOff: global.webhook2contentful.oneOff
+        oneOff: global.webhook2contentful.oneOff,
+        originalControls: global.webhook2contentful.originalControls
       }, function(err) {
         if (err) return reject(err);
-        require(`${__dirname}/populate.js`)(global.webhook2contentful).then(resolve).catch(reject);
+        require(`${__dirname}/populate.js`)(global.webhook2contentful).then(() => {
+          return runMigration({
+            filePath: `${__dirname}/postMigrate.js`,
+            spaceId: global.webhook2contentful.contentfulSpaceId,
+            accessToken: global.webhook2contentful.contentfulPersonalAccessToken,
+          }).then(() => {
+            if(cb) cb(done);
+          });
+        }).catch(reject);
       });
     });
-  }).catch(console.error).finally(() => { if(cb) cb(done); });
+  }).catch(err => {
+    console.error(err);
+    if(cb) cb(done);
+  });
 }
