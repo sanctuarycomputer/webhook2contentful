@@ -31,11 +31,12 @@ const controlTypeForField = (field, editor, originalControls) => {
     if (field.linkType === Types.ASSET) {
       const linkValidation = 
         field.validations.find(v => Object.keys(v).includes("linkMimetypeGroup"));
-      if (!linkValidation) throw "Link.Asset.noValidation";
+      if (!linkValidation) {
+        return { controlType: "file" };
+      }
       if (linkValidation.linkMimetypeGroup[0] === "image") {
         return { controlType: "image" };
       }
-      console.log(field);
       throw "Link.Asset.unknownValidation"
     } 
 
@@ -73,6 +74,10 @@ const controlTypeForField = (field, editor, originalControls) => {
     const widgetId = editor.controls.find(c => c.fieldId === field.id).widgetId;
     if (widgetId === Widgets.MARKDOWN) return { controlType: "markdown" };
     return { controlType: "textarea" };
+  }
+
+  if (field.type === Types.NUMBER) {
+    return { controlType: "number" };
   }
 
   if (field.type === Types.BOOLEAN) {

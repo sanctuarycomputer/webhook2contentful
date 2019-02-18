@@ -1,7 +1,7 @@
 const contentful = require('contentful-management');
 const ENTRY_TYPES = ['Link', 'Array']; 
 
-const cherrypickFields = (webhookDataset, fields, webhookId) => {
+const cherrypickFields = (webhookDataset, webhookType, fields, webhookId) => {
   const memo = {};
   if (webhookId) memo.__WEBHOOK_ID__ = webhookId;
 
@@ -9,6 +9,18 @@ const cherrypickFields = (webhookDataset, fields, webhookId) => {
     acc[field.id] = {
       'en-US': webhookDataset[field.id]
     };
+
+    /* Setup Tabular data */
+    const control = webhookType.controls.find(c => c.name === field.id);
+    if (control.controlType === 'tabular') {
+      acc[field.id] = {
+        'en-US': {
+          tabular: true,
+          keys: control.meta.options.map(tab => tab.value),
+          data: webhookDataset[field.id]
+        }
+      };
+    }
 
     // In validations don't allow nulls. Here we backkport them!
     const inValidation = field.validations.find(v => Object.keys(v).includes("in"));
@@ -157,11 +169,11 @@ const createContentfulDataset = async (
 ) => {
   let workingSet;
   if (webhookType.oneOff) {
-    workingSet = [cherrypickFields(webhookDataset, contentType.fields, false)];
+    workingSet = [cherrypickFields(webhookDataset, webhookType, contentType.fields, false)];
   } else {
     workingSet = Object.keys(webhookDataset).map(webhookId => {
       const itemData = webhookDataset[webhookId];
-      return cherrypickFields(itemData, contentType.fields, webhookId);
+      return cherrypickFields(itemData, webhookType, contentType.fields, webhookId);
     });
   }
 
@@ -253,9 +265,9 @@ const findPersistedEntryForRelation = (persisted, webhookRelation) => {
 const resolveLinksForObject = (obj, persisted, webhookType, stack, webhookId, webhookKey) => {
   obj.__RESOLVE_LINKS__.forEach(key => {
     const unresolved = obj[key]['en-US'];
+    const control = webhookType.controls.find(c => c.name === key);
 
     /* Stash Grids for later */
-    const control = webhookType.controls.find(c => c.name === key);
     if (control.controlType === 'grid') {
       stack.grids.push({
         webhookKey,
@@ -476,7 +488,7 @@ module.exports = async function({ webhookData, webhookTypes, detectedInverseRela
   console.log(`✅ ~~~> Loaded your Contentful space data!`);
 
   /* Let's take a pass */
-  const stack = { persisted: {}, waiting: {}, grids: [] };
+  const stack = { persisted: {}, waiting: {}, grids: [], tabulars: [] };
 
   await Object.keys(webhookData).reduce((acc, webhookKey) => {
     const webhookType = webhookTypes[webhookKey];

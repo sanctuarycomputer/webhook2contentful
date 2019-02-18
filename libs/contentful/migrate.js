@@ -10,7 +10,32 @@ const applyDisplayField = (ContentType, fieldNames) => {
   return;
 }
 
-const TAKEN_GRIDITEM_SUBTYPES = [];
+function underscore(text) {
+  return text.toString().toLowerCase()
+    .replace(/\s+/g, '_')           // Replace spaces with _
+    .replace(/[^\w\-]+/g, '')       // Remove all non-word chars
+    .replace(/\-\-+/g, '_')         // Replace multiple - with single _
+    .replace(/^-+/, '')             // Trim - from start of text
+    .replace(/-+$/, '');            // Trim - from end of text
+}
+
+const TAKEN_SUBTYPES = [];
+const makeUniqueSubitemName = (control) => {
+  let count = 0;
+  let originalLabel = `${control.label} Subitem`;
+  let attemptedLabel = `${control.label} Subitem`;
+  let originalName = `${control.name}_subitem`;
+  let attemptedName = `${control.name}_subitem`;
+
+  while (TAKEN_SUBTYPES.includes(attemptedName)) {
+    count++;
+    attemptedName = `${originalName}_v${count}`
+    attemptedLabel = `${originalLabel} (v${count})`
+  }
+
+  TAKEN_SUBTYPES.push(attemptedName);
+  return { name: attemptedName, label: attemptedLabel }
+}
 
 const buildWebhookControlForContentType = (migration, ContentType, control, detectedInverseRelationships) => {
   if (ignoreWebhookControl(control, detectedInverseRelationships)) return false;
@@ -21,24 +46,22 @@ const buildWebhookControlForContentType = (migration, ContentType, control, dete
 
   const controlMapping = WebhookFieldMappings[control.controlType];
   if (!controlMapping) {
-    console.log(control, control.meta);
+    console.log(ContentType, control, control.meta);
     throw new Error(`webhook2contentful ~~~> No mapping for webhook control: ${control.controlType}`);
   }
 
   let defaultValidations = [];
 
   /* Pull out Grid Types into subtypes */
+  let gridSubtype = null; 
   if (control.controlType === 'grid') {
-    const subItemType = `${control.name}_subitem`;
-    if (TAKEN_GRIDITEM_SUBTYPES.includes(subItemType)) {
-      throw new Error("webhook2contentful ~~~> Dang. You've got a couple of different grids (list item types) in your webhook model that have the same key name. Right now, this isn't a scenario we handle, please reach out to @_HHFF on twitter for some ideas");
-    }
-    const GridSubItemContentType = buildWebhookType(migration, `${control.name}_subitem`, `${control.label} Subitem`);
+    const { name, label } = makeUniqueSubitemName(control);
+    gridSubtype = name;
+    const GridSubItemContentType = buildWebhookType(migration, name, label);
     control.controls.forEach(control => {
       buildWebhookControlForContentType(migration, GridSubItemContentType, control, []);
     });
     applyDisplayField(GridSubItemContentType, control.controls.map(c => c.name));
-    TAKEN_GRIDITEM_SUBTYPES.push(subItemType);
   }
 
   /* Init the field */
@@ -72,7 +95,7 @@ const buildWebhookControlForContentType = (migration, ContentType, control, dete
       type: Types.LINK,
       linkType: Types.ENTRY,
       validations: [{
-        linkContentType: [`${control.name}_subitem`]
+        linkContentType: [gridSubtype]
       }]
     });
     ContentType.changeEditorInterface(control.name, Widgets.ENTRY_LINKS_EDITOR, {

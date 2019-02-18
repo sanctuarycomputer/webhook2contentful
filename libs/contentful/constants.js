@@ -29,6 +29,9 @@ const Widgets = {
 };
 
 const WebhookFieldMappings = {
+  'number': {
+    contentfulType: Types.NUMBER
+  },
   'radio': {
     contentfulType: Types.SYMBOL
   },
@@ -36,6 +39,9 @@ const WebhookFieldMappings = {
     contentfulType: Types.TEXT
   },
   'address': {
+    contentfulType: Types.OBJECT
+  },
+  'tabular': {
     contentfulType: Types.OBJECT
   },
   'textfield': {
