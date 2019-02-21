@@ -32,6 +32,8 @@ const deserializeSingularValue = (value, control, result) => {
   if (value.sys.type === Types.LINK) {
     if (value.sys.linkType === Types.ASSET) {
       const asset = result.assets.find(a => a.sys.id === value.sys.id)
+      if (!asset) return null;
+
       if (control.controlType === "image") {
         return deserializeImageAsset(asset);
       }
@@ -46,6 +48,8 @@ const deserializeSingularValue = (value, control, result) => {
     }
     if (value.sys.linkType === Types.ENTRY) {
       const linked = result.entries.find(e => e.sys.id === value.sys.id);
+      if (!linked) return null;
+
       return `${linked.sys.contentType.sys.id} ${value.sys.id}`;
     }
   }
