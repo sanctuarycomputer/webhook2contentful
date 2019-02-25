@@ -4,6 +4,7 @@ const { Types, Widgets, WebhookFieldMappings } = Constants;
 const deserializeImageAsset = asset => {
   const file = asset.fields.file['en-US'];
   return {
+    caption: (asset.fields.description ? asset.fields.description['en-US'] : ""),
     height: file.details.image.height,
     resize_url: file.url,
     size: file.details.size,
@@ -78,7 +79,7 @@ const deserialize = (entry, mungedTypes, result) => {
       if (control.controlType === 'grid') {
         return (deserialized[control.name] = value.map(gridItem => {
           return result.entries.find(e => e.sys.id === gridItem.sys.id);
-        }).map(entry => {
+        }).filter(e => !!e).map(entry => {
           return deserialize(entry, mungedTypes, result);
         }));
       }
