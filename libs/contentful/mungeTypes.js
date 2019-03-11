@@ -93,8 +93,9 @@ const controlTypeForField = (field, editor, originalControls) => {
   }
 
   if (field.type === Types.DATE) {
-    console.log(field, editor);
-    throw "TODO: Date.notImplemented";
+    return {
+      controlType: "datetime"
+    };
   }
 
   if (field.type === Types.OBJECT) {
