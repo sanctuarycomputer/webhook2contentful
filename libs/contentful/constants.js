@@ -29,118 +29,128 @@ const Widgets = {
 };
 
 const WebhookFieldMappings = {
-  'number': {
+  number: {
     contentfulType: Types.NUMBER
   },
-  'radio': {
+  radio: {
     contentfulType: Types.SYMBOL
   },
-  'wysiwyg': {
+  wysiwyg: {
     contentfulType: Types.TEXT
   },
-  'address': {
+  address: {
     contentfulType: Types.OBJECT
   },
-  'tabular': {
+  tabular: {
     contentfulType: Types.OBJECT
   },
-  'textfield': {
+  textfield: {
     contentfulType: Types.SYMBOL
   },
-  'textarea': {
+  textarea: {
     contentfulType: Types.TEXT
   },
-  'datetime': {
+  datetime: {
     contentfulType: Types.DATE
   },
-  'markdown': {
+  markdown: {
     contentfulType: Types.TEXT
   },
-  'url': {
-    contentfulType: Types.SYMBOL,
-  },
-  'embedly': {
-    contentfulType: Types.TEXT,
-  },
-  'email': {
+  url: {
     contentfulType: Types.SYMBOL
   },
-  'phone': {
+  embedly: {
+    contentfulType: Types.TEXT
+  },
+  email: {
     contentfulType: Types.SYMBOL
   },
-  'color': {
+  phone: {
     contentfulType: Types.SYMBOL
   },
-  'boolean': {
-    contentfulType: Types.BOOLEAN,
-  },
-  'select': {
+  color: {
     contentfulType: Types.SYMBOL
   },
-  'checkbox': {
+  boolean: {
+    contentfulType: Types.BOOLEAN
+  },
+  select: {
     contentfulType: Types.SYMBOL
   },
-  'relation': {},
-  'image': {},
-  'file': {},
-  'gallery': {},
-  'grid': {},
-}
+  checkbox: {
+    contentfulType: Types.SYMBOL
+  },
+  relation: {},
+  image: {},
+  file: {},
+  gallery: {},
+  grid: {}
+};
 
 const WebhookSiteSettingsType = {
-  controls: [{
-    "controlType": "textarea",
-    "hidden": false,
-    "label": "Site Description",
-    "locked": true,
-    "name": "site_description",
-    "required": false,
-    "showInCms": true 
-  }, {
-    "controlType": "textfield",
-    "hidden": false,
-    "label": "Site Facebook",
-    "locked": true,
-    "name": "site_facebook",
-    "required": false,
-    "showInCms": true 
-  }, {
-    "controlType": "textfield",
-    "hidden": false,
-    "label": "Site Keywords",
-    "locked": true,
-    "name": "site_keywords",
-    "required": false,
-    "showInCms": true 
-  }, {
-    "controlType": "textfield",
-    "hidden": false,
-    "label": "Site Name",
-    "locked": true,
-    "name": "site_name",
-    "required": false,
-    "showInCms": true 
-  }, {
-    "controlType": "textfield",
-    "hidden": false,
-    "label": "Site Twitter",
-    "locked": true,
-    "name": "site_twitter",
-    "required": false,
-    "showInCms": true 
-  }, {
-    "controlType": "textfield",
-    "hidden": false,
-    "label": "Site URL",
-    "locked": true,
-    "name": "site_url",
-    "required": false,
-    "showInCms": true 
-  }],
-  name: "Site Settings",
+  controls: [
+    {
+      controlType: 'textarea',
+      hidden: false,
+      label: 'Site Description',
+      locked: true,
+      name: 'site_description',
+      required: false,
+      showInCms: true
+    },
+    {
+      controlType: 'textfield',
+      hidden: false,
+      label: 'Site Facebook',
+      locked: true,
+      name: 'site_facebook',
+      required: false,
+      showInCms: true
+    },
+    {
+      controlType: 'textfield',
+      hidden: false,
+      label: 'Site Keywords',
+      locked: true,
+      name: 'site_keywords',
+      required: false,
+      showInCms: true
+    },
+    {
+      controlType: 'textfield',
+      hidden: false,
+      label: 'Site Name',
+      locked: true,
+      name: 'site_name',
+      required: false,
+      showInCms: true
+    },
+    {
+      controlType: 'textfield',
+      hidden: false,
+      label: 'Site Twitter',
+      locked: true,
+      name: 'site_twitter',
+      required: false,
+      showInCms: true
+    },
+    {
+      controlType: 'textfield',
+      hidden: false,
+      label: 'Site URL',
+      locked: true,
+      name: 'site_url',
+      required: false,
+      showInCms: true
+    }
+  ],
+  name: 'Site Settings',
   oneOff: true
 };
 
 module.exports = {
-  Types, Widgets, WebhookFieldMappings, WebhookSiteSettingsType
+  Types,
+  Widgets,
+  WebhookFieldMappings,
+  WebhookSiteSettingsType
 };

@@ -6,5 +6,5 @@ module.exports = () => {
     netlifyDNS: process.env.NETLIFY_DNS,
     contentfulSpaceId: process.env.CONTENTFUL_SPACE_ID,
     contentfulPersonalAccessToken: process.env.CONTENTFUL_PERSONAL_ACCESS_TOKEN
-  }
-}
+  };
+};
