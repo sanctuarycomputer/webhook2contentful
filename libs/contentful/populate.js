@@ -61,7 +61,7 @@ const cherrypickFields = (webhookDataset, webhookType, fields, webhookId) => {
   );
 };
 
-const createAsset = (environment, assetBlueprintItem) => {
+const createAsset = async (environment, assetBlueprintItem) => {
   // It's possible for webhook to store a file without
   // a content type, so let's throw
   if (!assetBlueprintItem.type) return Promise.reject();
@@ -69,10 +69,10 @@ const createAsset = (environment, assetBlueprintItem) => {
   const splat = assetBlueprintItem.url.split('/');
   const filename = splat[splat.length - 1];
 
-  console.log(`🖼 ~~~> Uploading ${filename} to Contentful.`);
+  console.log(`🖼 ~~~> Uploading ${assetBlueprintItem} to Contentful.`);
 
-  return environment
-    .createAsset({
+  try {
+    let asset = await environment.createAsset({
       fields: {
         title: { 'en-US': filename },
         file: {
@@ -85,35 +85,24 @@ const createAsset = (environment, assetBlueprintItem) => {
           }
         }
       }
-    })
-    .then(asset => {
-      return asset
-        .processForAllLocales()
-        .then(asset => {
-          return asset.publish().catch(err => {
-            console.log(`🚫 ~~~> Could NOT publish asset ${filename}.`, err);
-            throw err;
-          });
-        })
-        .catch(err => {
-          console.log(
-            `🚫 ~~~> Could NOT process asset ${filename} (${
-              assetBlueprintItem.url
-            }).`,
-            err
-          );
-          throw err;
-        });
-    })
-    .catch(err => {
-      console.log(`~~~~> Could not create asset`, err);
-      throw err;
     });
+    asset = await asset.processForAllLocales();
+    asset = await asset.publish();
+    return asset;
+  } catch (err) {
+    console.log(
+      `🚫 ~~~> Could NOT process asset ${filename} (${
+        assetBlueprintItem.url
+      }).`,
+      err
+    );
+    throw err;
+  }
 };
 
 const buildAssetsForObject = async (environment, obj) => {
   const objKeyResolvers = Object.keys(obj.__BUILD_ASSETS__).reduce(
-    (acc, assetKey) => {
+    async (acc, assetKey) => {
       let assetBlueprint = obj.__BUILD_ASSETS__[assetKey];
       let arrayifiedAssetBlueprint = Array.isArray(assetBlueprint)
         ? assetBlueprint
@@ -126,36 +115,33 @@ const buildAssetsForObject = async (environment, obj) => {
       let processedAssets = [];
 
       const build = arrayifiedAssetBlueprint.reduce(
-        (acc, assetBlueprintItem) => {
+        async (acc, assetBlueprintItem) => {
           if (!assetBlueprintItem) return acc;
-          return acc.then(() => {
-            return createAsset(environment, assetBlueprintItem)
-              .then(asset => {
-                processedAssets.push(asset);
-                return asset;
-              })
-              .catch(err => {
-                console.log(
-                  'Skipping one asset that could not be processed',
-                  assetBlueprintItem
-                );
-                return err;
-              });
-          });
+
+          await acc; //?
+          try {
+            const asset = await createAsset(environment, assetBlueprintItem);
+            processedAssets.push(asset);
+            return asset;
+          } catch (err) {
+            console.log(
+              'Skipping one asset that could not be processed',
+              assetBlueprintItem
+            );
+            return err;
+          }
         },
         Promise.resolve()
       );
 
-      return acc.then(() =>
-        build.then(() => {
-          if (Array.isArray(assetBlueprint)) {
-            obj.__BUILD_ASSETS__[assetKey] = processedAssets;
-          } else {
-            obj.__BUILD_ASSETS__[assetKey] = processedAssets[0];
-          }
-          return processedAssets;
-        })
-      );
+      await acc;
+      await build;
+      if (Array.isArray(assetBlueprint)) {
+        obj.__BUILD_ASSETS__[assetKey] = processedAssets;
+      } else {
+        obj.__BUILD_ASSETS__[assetKey] = processedAssets[0];
+      }
+      return processedAssets;
     },
     Promise.resolve()
   );
@@ -219,6 +205,7 @@ const createContentfulDataset = async (
   await workingSet.reduce((acc, obj) => {
     return acc.then(() => buildAssetsForObject(environment, obj));
   }, Promise.resolve());
+
   console.log(`✅ ~~~> Finished building assets for ${webhookKey}`);
 
   /* Attempt to persist the dataset itself */
@@ -230,7 +217,7 @@ const createContentfulDataset = async (
       `🚫 ~~~> Couldn't persist ${webhookKey} yet, as further links are required.`
     );
   } else {
-    await workingSet.reduce((acc, fields) => {
+    await workingSet.reduce(async (acc, fields) => {
       let webhookId;
       if (fields.__WEBHOOK_ID__) {
         webhookId = fields.__WEBHOOK_ID__;
@@ -239,32 +226,28 @@ const createContentfulDataset = async (
       delete fields.__RESOLVE_LINKS__;
       delete fields.__BUILD_ASSETS__;
 
-      return acc.then(() => {
-        return environment
-          .createEntry(webhookKey, { fields })
-          .then(entry => {
-            return entry
-              .publish()
-              .then(entry => {
-                console.log(`✅ ~~~> Published ${webhookKey}.`, webhookId);
-                if (webhookId) {
-                  persistedWorkingSet[webhookId] = entry;
-                } else {
-                  persistedWorkingSet['oneOff'] = entry;
-                }
-                return entry;
-              })
-              .catch(err => {
-                console.log(`🚫 ~~~> Could NOT publish ${webhookKey}.`, err);
-                // Let it slide, it will just be in draft more
-                return err;
-              });
-          })
-          .catch(err => {
-            console.log('~~~~~~~~~> Could not create entry', err);
-            throw err;
-          });
-      });
+      await acc;
+      try {
+        let entry = await environment.createEntry(webhookKey, { fields });
+      } catch (err) {
+        console.log('~~~~~~~~~> Could not create entry', err);
+        throw err;
+      }
+      try {
+        entry = await entry.publish();
+      } catch (err) {
+        console.log(`🚫 ~~~> Could NOT publish ${webhookKey}.`, err);
+        // Let it slide, it will just be in draft more
+        return err;
+      }
+
+      console.log(`✅ ~~~> Published ${webhookKey}.`, webhookId);
+      if (webhookId) {
+        persistedWorkingSet[webhookId] = entry;
+      } else {
+        persistedWorkingSet['oneOff'] = entry;
+      }
+      return entry;
     }, Promise.resolve());
 
     persisted = true;
@@ -411,197 +394,177 @@ const resolveLinksForCollection = (
 };
 
 let passes = 0;
-const resolveLinksAcrossStack = (environment, stack, webhookTypes) => {
+const resolveLinksAcrossStack = async (environment, stack, webhookTypes) => {
   passes++;
   console.log(`🔥 ~~~> Starting link resolution pass: ${passes}.`);
 
-  const chain = Object.keys(stack.waiting).reduce((acc, webhookKey) => {
-    return acc.then(() => {
-      const workingSet = stack.waiting[webhookKey];
+  const chain = Object.keys(stack.waiting).reduce(async (acc, webhookKey) => {
+    await acc;
 
-      if (Array.isArray(workingSet)) {
-        resolveLinksForCollection(
-          workingSet,
-          stack.persisted,
-          webhookTypes[webhookKey],
-          stack,
-          webhookKey
+    const workingSet = stack.waiting[webhookKey];
+
+    if (Array.isArray(workingSet)) {
+      resolveLinksForCollection(
+        workingSet,
+        stack.persisted,
+        webhookTypes[webhookKey],
+        stack,
+        webhookKey
+      );
+      if (workingSet.some(obj => obj.__RESOLVE_LINKS__.length > 0)) {
+        console.log(
+          `🚫 ~~~> Couldn't persist ${webhookKey} yet, as further links are required.`
         );
-        if (workingSet.some(obj => obj.__RESOLVE_LINKS__.length > 0)) {
-          console.log(
-            `🚫 ~~~> Couldn't persist ${webhookKey} yet, as further links are required.`
-          );
-          return Promise.resolve();
-        } else {
-          console.log(
-            `⌛ ~~~> Did resolve all links for ${webhookKey} on pass: ${passes}, beginning persistance!`
-          );
-
-          let persistedWorkingSet = {};
-          const chain = workingSet.reduce((acc, fields) => {
-            let webhookId;
-            if (fields.__WEBHOOK_ID__) {
-              webhookId = fields.__WEBHOOK_ID__;
-              delete fields.__WEBHOOK_ID__;
-            }
-            delete fields.__RESOLVE_LINKS__;
-            delete fields.__BUILD_ASSETS__;
-            return acc.then(() =>
-              environment.createEntry(webhookKey, { fields }).then(entry => {
-                return entry
-                  .publish()
-                  .then(entry => {
-                    if (webhookId) {
-                      persistedWorkingSet[webhookId] = entry;
-                    }
-                    console.log(
-                      `🙄 ~~~> Did persist a ${webhookKey} record, moving on...`
-                    );
-                    return entry;
-                  })
-                  .catch(err => {
-                    console.log(
-                      `🚫 ~~~> Could NOT publish ${webhookKey}.`,
-                      err
-                    );
-                    throw err;
-                  });
-              })
-            );
-          }, Promise.resolve());
-
-          return chain.then(() => {
-            console.log(
-              `✅ ~~~> Did persist all items for ${webhookKey} on pass: ${passes}.`
-            );
-            delete stack.waiting[webhookKey];
-            stack.persisted[webhookKey] = persistedWorkingSet;
-            return;
-          });
-        }
+        return Promise.resolve();
       } else {
-        resolveLinksForObject(
-          workingSet,
-          stack.persisted,
-          webhookTypes[webhookKey],
-          stack,
-          webhookKey,
-          webhookKey
+        console.log(
+          `⌛ ~~~> Did resolve all links for ${webhookKey} on pass: ${passes}, beginning persistance!`
         );
-        if (workingSet.__RESOLVE_LINKS__.length > 0) {
+
+        let persistedWorkingSet = {};
+        const chain = workingSet.reduce(async (acc, fields) => {
+          let webhookId;
+          if (fields.__WEBHOOK_ID__) {
+            webhookId = fields.__WEBHOOK_ID__;
+            delete fields.__WEBHOOK_ID__;
+          }
+          delete fields.__RESOLVE_LINKS__;
+          delete fields.__BUILD_ASSETS__;
+
+          await acc;
+
+          try {
+            let entry = await environment.createEntry(webhookKey, { fields });
+            entry = await entry.publish();
+
+            if (webhookId) {
+              persistedWorkingSet[webhookId] = entry;
+            }
+            console.log(
+              `🙄 ~~~> Did persist a ${webhookKey} record, moving on...`
+            );
+            return entry;
+          } catch (err) {
+            console.log(`🚫 ~~~> Could NOT publish ${webhookKey}.`, err);
+            throw err;
+          }
+        }, Promise.resolve());
+
+        await chain;
+        console.log(
+          `✅ ~~~> Did persist all items for ${webhookKey} on pass: ${passes}.`
+        );
+        delete stack.waiting[webhookKey];
+        stack.persisted[webhookKey] = persistedWorkingSet;
+        return;
+      }
+    } else {
+      resolveLinksForObject(
+        workingSet,
+        stack.persisted,
+        webhookTypes[webhookKey],
+        stack,
+        webhookKey,
+        webhookKey
+      );
+      if (workingSet.__RESOLVE_LINKS__.length > 0) {
+        console.log(
+          `🚫 ~~~> Couldn't persist ${webhookKey} yet, as further links are required.`
+        );
+        return Promise.resolve();
+      } else {
+        console.log(
+          `⌛ ~~~> Did resolve all links for ${webhookKey} on pass: ${passes}, beginning persistance!`
+        );
+        delete workingSet.__RESOLVE_LINKS__;
+        delete workingSet.__BUILD_ASSETS__;
+        try {
+          let entry = await environment.createEntry(webhookKey, {
+            fields: workingSet
+          });
+          entry = await entry.publish();
+
           console.log(
-            `🚫 ~~~> Couldn't persist ${webhookKey} yet, as further links are required.`
+            `✅ ~~~> Did persist oneOff item for ${webhookKey} on pass: ${passes}.`
           );
-          return Promise.resolve();
-        } else {
-          console.log(
-            `⌛ ~~~> Did resolve all links for ${webhookKey} on pass: ${passes}, beginning persistance!`
-          );
-          delete workingSet.__RESOLVE_LINKS__;
-          delete workingSet.__BUILD_ASSETS__;
-          return environment
-            .createEntry(webhookKey, { fields: workingSet })
-            .then(entry => {
-              return entry
-                .publish()
-                .then(entry => {
-                  console.log(
-                    `✅ ~~~> Did persist oneOff item for ${webhookKey} on pass: ${passes}.`
-                  );
-                  delete stack.waiting[webhookKey];
-                  stack.persisted[webhookKey] = entry;
-                  return entry;
-                })
-                .catch(err => {
-                  console.log(`🚫 ~~~> Could NOT publish ${webhookKey}.`, err);
-                  throw err;
-                });
-            });
+          delete stack.waiting[webhookKey];
+          stack.persisted[webhookKey] = entry;
+          return entry;
+        } catch (err) {
+          console.log(`🚫 ~~~> Could NOT publish ${webhookKey}.`, err);
+          throw err;
         }
       }
-    });
+    }
   }, Promise.resolve());
 
-  return chain.then(() => {
-    if (Object.keys(stack.waiting).length > 0) {
-      console.log("🎇 !!! Pass completed, we're going in again!");
-      return resolveLinksAcrossStack(environment, stack, webhookTypes);
-    } else {
-      return Promise.resolve();
-    }
-  });
+  await chain;
+  if (Object.keys(stack.waiting).length > 0) {
+    console.log("🎇 !!! Pass completed, we're going in again!");
+    return resolveLinksAcrossStack(environment, stack, webhookTypes);
+  } else {
+    return Promise.resolve();
+  }
 };
 
 const persistGridItems = (environment, stack, webhookTypes) => {
-  return stack.grids.reduce((chain, gridDataset) => {
-    return chain.then(() => {
-      if (!gridDataset.data) return Promise.resolve();
-      const fauxWebhookKey = `${gridDataset.key}_subitem`;
+  return stack.grids.reduce(async (chain, gridDataset) => {
+    await chain;
+    if (!gridDataset.data) return Promise.resolve();
+    const fauxWebhookKey = `${gridDataset.key}_subitem`;
 
+    try {
       /* Load the content type for the grid item */
-      return environment
-        .getContentType(fauxWebhookKey)
-        .then(ContentType => {
-          const fauxWebhookType = {
-            oneOff: false,
-            controls: webhookTypes[gridDataset.webhookKey].controls.find(
-              c => c.name === gridDataset.key
-            ).controls
-          };
+      const ContentType = await environment.getContentType(fauxWebhookKey);
 
-          return createContentfulDataset(
-            environment,
-            ContentType,
-            fauxWebhookKey,
-            fauxWebhookType,
-            gridDataset.data
-          ).then(({ workingSet, persisted }) => {
-            if (persisted) {
-              /* Resolve the parent */
-              let parentEntry;
-              if (webhookTypes[gridDataset.webhookKey].oneOff) {
-                parentEntry = stack.persisted[gridDataset.webhookKey];
-              } else {
-                parentEntry =
-                  stack.persisted[gridDataset.webhookKey][
-                    gridDataset.webhookId
-                  ];
-              }
-              /* Reload the parent entry to avoid 409 Conflicts */
-              return environment
-                .getEntry(parentEntry.sys.id)
-                .then(reloadedEntry => {
-                  reloadedEntry.fields[gridDataset.key] = {
-                    'en-US': Object.values(workingSet).map(entry => ({
-                      sys: { type: 'Link', linkType: 'Entry', id: entry.sys.id }
-                    }))
-                  };
-                  return reloadedEntry.update();
-                })
-                .catch(err => {
-                  console.log(
-                    'Couldnt reload the parent entry for a grid item',
-                    err
-                  );
-                  return err;
-                });
-            } else {
-              console.log(
-                `!!! ~~~~> Your ${fauxWebhookKey} grid items have relationships! This case is not supported by webhook2contentful yet.`
-              );
-              return Promise.resolve();
-            }
-          });
-        })
-        .catch(err => {
-          console.log(
-            '!!! Could not finalize a grid item ~~~~>',
-            gridDataset.data
-          );
-          console.log(err);
+      const fauxWebhookType = {
+        oneOff: false,
+        controls: webhookTypes[gridDataset.webhookKey].controls.find(
+          c => c.name === gridDataset.key
+        ).controls
+      };
+
+      const { workingSet, persisted } = await createContentfulDataset(
+        environment,
+        ContentType,
+        fauxWebhookKey,
+        fauxWebhookType,
+        gridDataset.data
+      );
+      if (persisted) {
+        /* Resolve the parent */
+        let parentEntry;
+        if (webhookTypes[gridDataset.webhookKey].oneOff) {
+          parentEntry = stack.persisted[gridDataset.webhookKey];
+        } else {
+          parentEntry =
+            stack.persisted[gridDataset.webhookKey][gridDataset.webhookId];
+        }
+        try {
+          /* Reload the parent entry to avoid 409 Conflicts */
+          const reloadedEntry = await environment.getEntry(parentEntry.sys.id);
+
+          reloadedEntry.fields[gridDataset.key] = {
+            'en-US': Object.values(workingSet).map(entry => ({
+              sys: { type: 'Link', linkType: 'Entry', id: entry.sys.id }
+            }))
+          };
+          return await reloadedEntry.update();
+        } catch (err) {
+          console.log('Couldnt reload the parent entry for a grid item', err);
           return err;
-        });
-    });
+        }
+      } else {
+        console.log(
+          `!!! ~~~~> Your ${fauxWebhookKey} grid items have relationships! This case is not supported by webhook2contentful yet.`
+        );
+        return Promise.resolve();
+      }
+    } catch (err) {
+      console.log('!!! Could not finalize a grid item ~~~~>', gridDataset.data);
+      console.log(err);
+      return err;
+    }
   }, Promise.resolve());
 };
 
@@ -628,45 +591,44 @@ module.exports = async function({
 
   /* Preload the Content Types */
   const ContentTypes = {};
-  await Object.keys(webhookData).reduce((acc, webhookKey) => {
+  await Object.keys(webhookData).reduce(async (acc, webhookKey) => {
     const webhookType = webhookTypes[webhookKey];
     if (!webhookType) return acc;
-    return acc.then(() => {
-      console.log(`~~~> Loading Contentful content type: ${webhookKey}`);
-      return environment.getContentType(webhookKey).then(contentType => {
-        ContentTypes[webhookKey] = contentType;
-        return;
-      });
-    });
+
+    await acc;
+
+    console.log(`~~~> Loading Contentful content type: ${webhookKey}`);
+    const contentType = await environment.getContentType(webhookKey);
+    ContentTypes[webhookKey] = contentType;
+    return;
   }, Promise.resolve());
   console.log(`✅ ~~~> Loaded your Contentful space data!`);
 
   /* Let's take a pass */
   const stack = { persisted: {}, waiting: {}, grids: [], tabulars: [] };
 
-  await Object.keys(webhookData).reduce((acc, webhookKey) => {
+  await Object.keys(webhookData).reduce(async (acc, webhookKey) => {
     const webhookType = webhookTypes[webhookKey];
     if (!webhookType) return acc;
     const webhookDataset = webhookData[webhookKey];
 
-    return acc.then(() => {
-      console.log(`🔨 ~~~> Taking initial pass for: ${webhookKey}`);
+    await acc;
 
-      return createContentfulDataset(
-        environment,
-        ContentTypes[webhookKey],
-        webhookKey,
-        webhookType,
-        webhookDataset
-      ).then(({ persisted, workingSet }) => {
-        if (persisted) {
-          stack.persisted[webhookKey] = workingSet;
-        } else {
-          stack.waiting[webhookKey] = workingSet;
-        }
-        return;
-      });
-    });
+    console.log(`🔨 ~~~> Taking initial pass for: ${webhookKey}`);
+
+    const { persisted, workingSet } = await createContentfulDataset(
+      environment,
+      ContentTypes[webhookKey],
+      webhookKey,
+      webhookType,
+      webhookDataset
+    );
+    if (persisted) {
+      stack.persisted[webhookKey] = workingSet;
+    } else {
+      stack.waiting[webhookKey] = workingSet;
+    }
+    return;
   }, Promise.resolve());
 
   await resolveLinksAcrossStack(environment, stack, webhookTypes);
