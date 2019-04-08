@@ -24,6 +24,7 @@ const getBucket = () => {
     contentfulExport({
       spaceId: contentfulConfig.contentfulSpaceId,
       managementToken: contentfulConfig.contentfulPersonalAccessToken,
+      environmentId: contentfulConfig.contentfulEnvironmentId,
       skipRoles: true,
       skipWebhooks: true,
       saveFile: false

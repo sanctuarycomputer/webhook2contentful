@@ -614,11 +614,17 @@ module.exports = async function({
     accessToken: global.webhook2contentful.contentfulPersonalAccessToken
   });
 
-  console.log(`⌛ ~~~> Loading your Contentful space data...`);
   const space = await client.getSpace(
     global.webhook2contentful.contentfulSpaceId
   );
-  const environment = await space.getEnvironment('master');
+  const environment = await space.getEnvironment(
+    global.webhook2contentful.contentfulConfig.contentfulEnvironmentId
+  );
+  console.log(
+    `⌛ ~~~> Loading your Contentful space data... [${
+      global.webhook2contentful.contentfulSpaceId
+    }:${global.webhook2contentful.contentfulEnvironmentId}]`
+  );
 
   /* Preload the Content Types */
   const ContentTypes = {};
