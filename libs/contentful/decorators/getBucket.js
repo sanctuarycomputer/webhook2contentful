@@ -8,54 +8,57 @@ require('colors');
 let _contentfulResults = null;
 let _onceStack = [];
 
-const getBucket = async () => {
+const getBucket = () => {
   console.log("webhook2contentful ~~~> Success, we're using contentful!".green);
   const contentfulConfig = getConfig();
 
-  const meta = require('jsonfile').readFileSync(
-    `${__dirname}/../generatedMeta.json`
-  );
+  require('jsonfile').readFile(`${__dirname}/../generatedMeta.json`, function(
+    err,
+    meta
+  ) {
+    if (err) return console.error(err);
 
-  contentfulConfig.singletons = meta.oneOff || [];
-  contentfulConfig.originalControls = meta.originalControls || {};
+    contentfulConfig.singletons = meta.oneOff || [];
+    contentfulConfig.originalControls = meta.originalControls || {};
 
-  const result = await contentfulExport({
-    spaceId: contentfulConfig.contentfulSpaceId,
-    managementToken: contentfulConfig.contentfulPersonalAccessToken,
-    environmentId: contentfulConfig.contentfulEnvironmentId,
-    skipRoles: true,
-    skipWebhooks: true,
-    saveFile: false
-  });
+    contentfulExport({
+      spaceId: contentfulConfig.contentfulSpaceId,
+      managementToken: contentfulConfig.contentfulPersonalAccessToken,
+      environmentId: contentfulConfig.contentfulEnvId,
+      skipRoles: true,
+      skipWebhooks: true,
+      saveFile: false
+    }).then(result => {
+      const mungedTypes = mungeTypes(result, contentfulConfig);
+      const mungedContent = mungeContent(result, contentfulConfig, mungedTypes);
 
-  const mungedTypes = mungeTypes(result, contentfulConfig);
-  const mungedContent = mungeContent(result, contentfulConfig, mungedTypes);
+      Object.keys(mungedTypes).forEach(typeKey => {
+        if (typeKey.endsWith('_subitem')) delete mungedTypes[typeKey];
+      });
 
-  Object.keys(mungedTypes).forEach(typeKey => {
-    if (typeKey.endsWith('_subitem')) delete mungedTypes[typeKey];
-  });
+      Object.keys(mungedContent).forEach(typeKey => {
+        if (typeKey.endsWith('_subitem')) delete mungedContent[typeKey];
+      });
 
-  Object.keys(mungedContent).forEach(typeKey => {
-    if (typeKey.endsWith('_subitem')) delete mungedContent[typeKey];
-  });
+      let mungedSettings = {};
+      if (mungedContent['site_settings']) {
+        mungedSettings = { general: mungedContent['site_settings'] };
+        delete mungedContent['site_settings'];
+      }
 
-  let mungedSettings = {};
-  if (mungedContent['site_settings']) {
-    mungedSettings = { general: mungedContent['site_settings'] };
-    delete mungedContent['site_settings'];
-  }
-
-  _contentfulResults = {
-    val: function() {
-      return {
-        data: mungedContent,
-        contentType: mungedTypes,
-        settings: mungedSettings
+      _contentfulResults = {
+        val: function() {
+          return {
+            data: mungedContent,
+            contentType: mungedTypes,
+            settings: mungedSettings
+          };
+        }
       };
-    }
-  };
-  _onceStack.forEach(cb => cb(_contentfulResults));
-  _onceStack = [];
+      _onceStack.forEach(cb => cb(_contentfulResults));
+      _onceStack = [];
+    });
+  });
 
   return {
     once: function(eventName, callback) {
@@ -64,6 +67,7 @@ const getBucket = async () => {
     }
   };
 };
+
 module.exports = original => {
   return [getBucket, original];
 };

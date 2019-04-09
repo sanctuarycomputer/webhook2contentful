@@ -13,6 +13,15 @@ const contentfulImageSize = (image, width, height, crop) => {
     source += '?w=' + width;
   }
 
+  if (image.resize_url.split('.').pop() == 'tif') {
+    source = source.replace('downloads.', 'images.');
+    if (source.indexOf('?') === -1) {
+      source += '?fm=jpg&q=60';
+    } else {
+      source += '&fm=jpg&q=60';
+    }
+  }
+
   if (crop) {
     if (source.indexOf('?') === -1) {
       source += '?fit=crop';
@@ -20,7 +29,6 @@ const contentfulImageSize = (image, width, height, crop) => {
       source += '&fit=crop';
     }
   }
-
   return source;
 };
 

@@ -1,6 +1,12 @@
 const contentful = require('contentful-management');
 const ENTRY_TYPES = ['Link', 'Array'];
 
+const urlExists = require('url-exists');
+const urlExistsPromise = url =>
+  new Promise((resolve, reject) =>
+    urlExists(url, (err, exists) => (err ? reject(err) : resolve(exists)))
+  );
+
 const cherrypickFields = (webhookDataset, webhookType, fields, webhookId) => {
   const memo = {};
   if (webhookId) memo.__WEBHOOK_ID__ = webhookId;
@@ -66,37 +72,52 @@ const createAsset = async (environment, assetBlueprintItem) => {
   // a content type, so let's throw
   if (!assetBlueprintItem.type) return Promise.reject();
 
-  const splat = assetBlueprintItem.url.split('/');
-  const filename = splat[splat.length - 1];
+  // const splat = assetBlueprintItem.url.split('/');
+  // const filename = splat[splat.length - 1];
+  const [, , guid, filename] = assetBlueprintItem.url.split('/');
 
-  console.log(`🖼 ~~~> Uploading ${assetBlueprintItem} to Contentful.`);
+  let url = `http://${global.webhook2contentful.webhookSiteName}.webhook.org${
+    assetBlueprintItem.url
+  }`;
+
+  // let assetPayload =
+  if (!(await urlExistsPromise(url))) {
+    throw 'Asset URL ${url} does not exist';
+  }
+
+  let asset;
 
   try {
-    let asset = await environment.createAsset({
-      fields: {
-        title: { 'en-US': filename },
-        file: {
-          'en-US': {
-            contentType: assetBlueprintItem.type,
-            fileName: filename,
-            upload: `http://${
-              global.webhook2contentful.webhookSiteName
-            }.webhook.org${assetBlueprintItem.url}`
+    asset = await environment.getAsset(guid).catch();
+    if (asset) {
+      console.log(
+        `🖼 ~~~> Uploading [${guid}] ${url} found existing asset, skipping`,
+        asset.id
+      );
+      return asset;
+    }
+  } catch (err) {
+    console.log(`🖼 ~~~> Uploading [${guid}] ${url} to Contentful.`);
+    try {
+      asset = await environment.createAssetWithId(guid, {
+        fields: {
+          title: { 'en-US': filename },
+          file: {
+            'en-US': {
+              contentType: assetBlueprintItem.type,
+              fileName: filename,
+              upload: url
+            }
           }
         }
-      }
-    });
-    asset = await asset.processForAllLocales();
-    asset = await asset.publish();
-    return asset;
-  } catch (err) {
-    console.log(
-      `🚫 ~~~> Could NOT process asset ${filename} (${
-        assetBlueprintItem.url
-      }).`,
-      err
-    );
-    throw err;
+      });
+
+      asset = await asset.processForAllLocales();
+      asset = await asset.publish();
+      return asset;
+    } catch (err) {
+      console.log(`🚫 ~~~> Uploading [${guid}] ${url} Could NOT process asset`);
+    }
   }
 };
 
@@ -202,8 +223,9 @@ const createContentfulDataset = async (
     });
   }
 
-  await workingSet.reduce((acc, obj) => {
-    return acc.then(() => buildAssetsForObject(environment, obj));
+  await workingSet.reduce(async (acc, obj) => {
+    await acc;
+    return buildAssetsForObject(environment, obj);
   }, Promise.resolve());
 
   console.log(`✅ ~~~> Finished building assets for ${webhookKey}`);
