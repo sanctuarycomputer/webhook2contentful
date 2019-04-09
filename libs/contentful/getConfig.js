@@ -5,6 +5,7 @@ module.exports = () => {
     webhookSiteName: process.env.WEBHOOK_SITE_NAME,
     netlifyDNS: process.env.NETLIFY_DNS,
     contentfulSpaceId: process.env.CONTENTFUL_SPACE_ID,
-    contentfulPersonalAccessToken: process.env.CONTENTFUL_PERSONAL_ACCESS_TOKEN
-  }
-}
+    contentfulPersonalAccessToken: process.env.CONTENTFUL_PERSONAL_ACCESS_TOKEN,
+    contentfulEnvironmentId: process.env.CONTENTFUL_ENVIRONMENT_ID
+  };
+};

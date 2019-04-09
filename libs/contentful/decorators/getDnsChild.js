@@ -4,12 +4,14 @@ const getDnsChild = () => {
   return {
     once: function(eventName, callback) {
       callback({
-        val: function() { return getConfig().netlifyDNS; }
+        val: function() {
+          return getConfig().netlifyDNS;
+        }
       });
     }
-  }
-}
+  };
+};
 
-module.exports = (original) => {
+module.exports = original => {
   return [getDnsChild, original];
-}
+};
